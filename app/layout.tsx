@@ -9,7 +9,6 @@ import "./globals.css"
 export const metadata: Metadata = {
   title: "Luxe - Premium Fashion & Lifestyle",
   description: "Discover curated collections of premium fashion and lifestyle products that define modern elegance.",
-  generator: "v0.app",
 }
 
 export default function RootLayout({

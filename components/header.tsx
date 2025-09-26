@@ -2,41 +2,35 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Search, ShoppingCart, User, Menu, Heart } from "lucide-react"
+import { Search, ShoppingCart, User, Menu, Heart, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuItem,
-  NavigationMenuList,
-  NavigationMenuTrigger,
-} from "@/components/ui/navigation-menu"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 
 const categories = [
   {
-    title: "Women",
-    items: ["Dresses", "Tops", "Bottoms", "Shoes", "Accessories", "Outerwear"],
+    title: "Smartphones",
+    items: ["iPhone", "Samsung Galaxy", "Google Pixel", "OnePlus", "Cases & Screen Protectors", "Wireless Chargers"],
   },
   {
-    title: "Men",
-    items: ["Shirts", "Pants", "Shoes", "Accessories", "Outerwear", "Activewear"],
+    title: "Computers",
+    items: ["Laptops", "Desktops", "Gaming PCs", "MacBooks", "Monitors", "Keyboards & Mice"],
   },
   {
-    title: "Kids",
-    items: ["Girls", "Boys", "Baby", "Shoes", "Accessories", "School"],
+    title: "Audio",
+    items: ["Headphones", "Earbuds", "Speakers", "Soundbars", "Microphones", "Audio Interfaces"],
   },
   {
-    title: "Home",
-    items: ["Living Room", "Bedroom", "Kitchen", "Bathroom", "Decor", "Storage"],
+    title: "Gaming",
+    items: ["PlayStation", "Xbox", "Nintendo Switch", "Gaming Headsets", "Controllers", "VR Headsets"],
   },
 ]
 
 export function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null)
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -48,34 +42,49 @@ export function Header() {
           </Link>
 
           {/* Desktop Navigation */}
-          <NavigationMenu className="hidden lg:flex">
-            <NavigationMenuList>
-              {categories.map((category) => (
-                <NavigationMenuItem key={category.title}>
-                  <NavigationMenuTrigger className="text-sm font-medium">{category.title}</NavigationMenuTrigger>
-                  <NavigationMenuContent>
-                    <div className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]">
-                      {category.items.map((item) => (
-                        <div key={item}>
-                          <Link
-                            href={`/category/${category.title.toLowerCase()}/${item.toLowerCase().replace(/\s+/g, "-")}`}
-                            className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
-                          >
-                            <div className="text-sm font-medium leading-none">{item}</div>
-                          </Link>
-                        </div>
-                      ))}
-                    </div>
-                  </NavigationMenuContent>
-                </NavigationMenuItem>
-              ))}
-              <NavigationMenuItem>
-                <Link href="/sale" className="text-sm font-medium text-destructive">
-                  Sale
-                </Link>
-              </NavigationMenuItem>
-            </NavigationMenuList>
-          </NavigationMenu>
+          <nav className="hidden lg:flex items-center space-x-1 relative">
+            {categories.map((category) => (
+              <div
+                key={category.title}
+                className="relative group"
+                onMouseEnter={() => setHoveredCategory(category.title)}
+                onMouseLeave={() => setHoveredCategory(null)}
+              >
+                <button className="flex items-center space-x-1 px-3 py-2 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                  <span>{category.title}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+                
+                {/* Dropdown */}
+                <div 
+                  className={`absolute top-full left-0 mt-1 w-[500px] bg-popover text-popover-foreground border rounded-md shadow-lg z-50 transition-all duration-200 ${
+                    hoveredCategory === category.title 
+                      ? 'opacity-100 visible translate-y-0' 
+                      : 'opacity-0 invisible -translate-y-2'
+                  }`}
+                >
+                  <div className="grid grid-cols-2 gap-1 p-4">
+                    {category.items.map((item) => (
+                      <Link
+                        key={item}
+                        href={`/category/${category.title.toLowerCase()}/${item.toLowerCase().replace(/\s+/g, "-")}`}
+                        className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+                      >
+                        {item}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            <Link 
+              href="/sale" 
+              className="px-3 py-2 text-sm font-medium text-destructive hover:bg-accent hover:text-accent-foreground rounded-md transition-colors"
+            >
+              Sale
+            </Link>
+          </nav>
 
           {/* Search Bar */}
           <div className="hidden md:flex flex-1 max-w-sm mx-8">
