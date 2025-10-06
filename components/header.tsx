@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Search, ShoppingCart, User, Menu, Heart, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -8,29 +8,50 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 
-const categories = [
-  {
-    title: "Smartphones",
-    items: ["iPhone", "Samsung Galaxy", "Google Pixel", "OnePlus", "Cases & Screen Protectors", "Wireless Chargers"],
-  },
-  {
-    title: "Computers",
-    items: ["Laptops", "Desktops", "Gaming PCs", "MacBooks", "Monitors", "Keyboards & Mice"],
-  },
-  {
-    title: "Audio",
-    items: ["Headphones", "Earbuds", "Speakers", "Soundbars", "Microphones", "Audio Interfaces"],
-  },
-  {
-    title: "Gaming",
-    items: ["PlayStation", "Xbox", "Nintendo Switch", "Gaming Headsets", "Controllers", "VR Headsets"],
-  },
-]
+interface Category {
+  _id: string;
+  name: string;
+  slug: string;
+  description: string;
+  image: string;
+  parentCategory: Category | null;
+  subcategories: Category[];
+  isActive: boolean;
+  sortOrder: number;
+  seoTitle: string;
+  seoDescription: string;
+}
 
 export function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Fetch categories from API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/categories')
+        if (response.ok) {
+          const data = await response.json()
+          setCategories(data.categories || [])
+        } else {
+          console.error('Failed to fetch categories')
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCategories()
+  }, [])
+
+  // Filter only parent categories (no parentCategory)
+  const parentCategories = categories.filter(cat => !cat.parentCategory)
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -43,40 +64,50 @@ export function Header() {
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center space-x-1 relative">
-            {categories.map((category) => (
-              <div
-                key={category.title}
-                className="relative group"
-                onMouseEnter={() => setHoveredCategory(category.title)}
-                onMouseLeave={() => setHoveredCategory(null)}
-              >
-                <button className="flex items-center space-x-1 px-3 py-2 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
-                  <span>{category.title}</span>
-                  <ChevronDown className="h-4 w-4" />
-                </button>
-                
-                {/* Dropdown */}
-                <div 
-                  className={`absolute top-full left-0 mt-1 w-[500px] bg-popover text-popover-foreground border rounded-md shadow-lg z-50 transition-all duration-200 ${
-                    hoveredCategory === category.title 
-                      ? 'opacity-100 visible translate-y-0' 
-                      : 'opacity-0 invisible -translate-y-2'
-                  }`}
-                >
-                  <div className="grid grid-cols-2 gap-1 p-4">
-                    {category.items.map((item) => (
-                      <Link
-                        key={item}
-                        href={`/category/${category.title.toLowerCase()}/${item.toLowerCase().replace(/\s+/g, "-")}`}
-                        className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
-                      >
-                        {item}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
+            {loading ? (
+              <div className="flex items-center space-x-4">
+                <div className="h-8 w-20 bg-gray-200 animate-pulse rounded"></div>
+                <div className="h-8 w-20 bg-gray-200 animate-pulse rounded"></div>
+                <div className="h-8 w-20 bg-gray-200 animate-pulse rounded"></div>
               </div>
-            ))}
+            ) : (
+              parentCategories.map((category) => (
+                <div
+                  key={category._id}
+                  className="relative group"
+                  onMouseEnter={() => setHoveredCategory(category._id)}
+                  onMouseLeave={() => setHoveredCategory(null)}
+                >
+                  <button className="flex items-center space-x-1 px-3 py-2 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                    <span>{category.name}</span>
+                    {category.subcategories.length > 0 && <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  
+                  {/* Dropdown for subcategories */}
+                  {category.subcategories.length > 0 && (
+                    <div 
+                      className={`absolute top-full left-0 mt-1 w-[500px] bg-popover text-popover-foreground border rounded-md shadow-lg z-50 transition-all duration-200 ${
+                        hoveredCategory === category._id 
+                          ? 'opacity-100 visible translate-y-0' 
+                          : 'opacity-0 invisible -translate-y-2'
+                      }`}
+                    >
+                      <div className="grid grid-cols-2 gap-1 p-4">
+                        {category.subcategories.map((subcat) => (
+                          <Link
+                            key={subcat._id}
+                            href={`/category/${subcat.slug}`}
+                            className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+                          >
+                            {subcat.name}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
             
             <Link 
               href="/sale" 
@@ -137,23 +168,39 @@ export function Header() {
               </SheetTrigger>
               <SheetContent side="right" className="w-[300px] sm:w-[400px]">
                 <div className="flex flex-col space-y-4 mt-8">
-                  {categories.map((category) => (
-                    <div key={category.title} className="space-y-2">
-                      <h3 className="font-semibold text-lg">{category.title}</h3>
-                      <div className="grid grid-cols-2 gap-2 pl-4">
-                        {category.items.map((item) => (
-                          <Link
-                            key={item}
-                            href={`/category/${category.title.toLowerCase()}/${item.toLowerCase().replace(/\s+/g, "-")}`}
-                            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                            onClick={() => setIsMobileMenuOpen(false)}
-                          >
-                            {item}
-                          </Link>
-                        ))}
-                      </div>
+                  {loading ? (
+                    <div className="space-y-4">
+                      <div className="h-6 bg-gray-200 animate-pulse rounded w-24"></div>
+                      <div className="h-6 bg-gray-200 animate-pulse rounded w-24"></div>
+                      <div className="h-6 bg-gray-200 animate-pulse rounded w-24"></div>
                     </div>
-                  ))}
+                  ) : (
+                    parentCategories.map((category) => (
+                      <div key={category._id} className="space-y-2">
+                        <Link
+                          href={`/category/${category.slug}`}
+                          className="font-semibold text-lg hover:text-accent-foreground transition-colors"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          {category.name}
+                        </Link>
+                        {category.subcategories.length > 0 && (
+                          <div className="grid grid-cols-2 gap-2 pl-4">
+                            {category.subcategories.map((subcat) => (
+                              <Link
+                                key={subcat._id}
+                                href={`/category/${subcat.slug}`}
+                                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                                onClick={() => setIsMobileMenuOpen(false)}
+                              >
+                                {subcat.name}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                   <Link
                     href="/sale"
                     className="text-lg font-semibold text-destructive"
