@@ -1,7 +1,7 @@
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { HeroSection } from "@/components/hero-section"
-import { FeaturedProducts } from "@/components/featured-products"
+import { DynamicProductSections } from "@/components/featured-products"
 import { CategoryShowcase } from "@/components/category-showcase"
 
 export default function HomePage() {
@@ -10,7 +10,7 @@ export default function HomePage() {
       <Header />
       <main className="flex-1">
         <HeroSection />
-        <FeaturedProducts />
+        <DynamicProductSections />
         <CategoryShowcase />
       </main>
       <Footer />

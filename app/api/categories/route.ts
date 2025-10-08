@@ -1,4 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
+import dbConnect from '@/lib/mongoose';
+// Removed duplicate import of Category
+
+// GET - Fetch categories
+export async function GET(request: NextRequest) {
+  try {
+    await dbConnect();
+    
+    const { searchParams } = new URL(request.url);
+    const parent = searchParams.get('parent');
+    const isActive = searchParams.get('active');
+    const includeChildren = searchParams.get('includeChildren') === 'true';
+    
+    // Build filter
+    const filter: any = {};
+    
+    if (parent === 'null' || parent === '') {
+      filter.parentCategory = null; // Root categories only
+    } else if (parent) {
+      filter.parentCategory = parent;
+    }
+    
+    if (isActive !== null && isActive !== undefined) {
+      filter.isActive = isActive === 'true';
+    }
+    
+    let categories;
+    
+    if (includeChildren) {
+      // Fetch categories with their children
+      categories = await Category.aggregate([
+        { $match: filter },
+        {
+          $lookup: {
+            from: 'categories',
+            localField: '_id',
+            foreignField: 'parentCategory',
+            as: 'children',
+            pipeline: [
+              { $match: { isActive: true } },
+              { $sort: { name: 1 } }
+            ]
+          }
+        },
+        { $sort: { name: 1 } }
+      ]);
+    } else {
+      // Simple category fetch
+      categories = await Category.find(filter)
+        .populate('parentCategory', 'name slug')
+        .sort({ sortOrder: 1, name: 1 })
+        .lean();
+    }
+    
+    return NextResponse.json({
+      success: true,
+      data: categories,
+      count: categories.length
+    });
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to fetch categories' },
+      { status: 500 }
+    );
+  }
+}
+
 import mongoose from 'mongoose';
 import Category from '@/models/Categories';
 
@@ -14,69 +82,6 @@ async function connectDB() {
   } catch (error) {
     console.error('MongoDB connection error:', error);
     throw new Error('Failed to connect to MongoDB');
-  }
-}
-
-export async function GET(request: NextRequest) {
-  try {
-    await connectDB();
-
-    const { searchParams } = new URL(request.url);
-    const parentId = searchParams.get('parent');
-    const includeInactive = searchParams.get('includeInactive') === 'true';
-    const limit = parseInt(searchParams.get('limit') || '0');
-
-    // Build query
-    let query: any = {};
-    
-    if (!includeInactive) {
-      query.isActive = true;
-    }
-
-    if (parentId) {
-      query.parentCategory = parentId;
-    } else if (parentId === null || searchParams.has('parent')) {
-      query.parentCategory = null; // Get only top-level categories
-    }
-
-    // Fetch categories with population
-    let categoriesQuery = Category.find(query)
-      .populate({
-        path: 'parentCategory',
-        select: 'name slug _id',
-        match: { isActive: true }
-      })
-      .populate({
-        path: 'subcategories',
-        select: 'name slug _id description image sortOrder',
-        match: { isActive: true },
-        options: { sort: { sortOrder: 1, name: 1 } }
-      })
-      .sort({ sortOrder: 1, name: 1 });
-
-    if (limit > 0) {
-      categoriesQuery = categoriesQuery.limit(limit);
-    }
-
-    const categories = await categoriesQuery.exec();
-
-    return NextResponse.json({
-      success: true,
-      message: 'Categories retrieved successfully',
-      categories,
-      count: categories.length
-    });
-
-  } catch (error) {
-    console.error('Error fetching categories:', error);
-    return NextResponse.json(
-      { 
-        success: false,
-        message: 'Failed to fetch categories',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
   }
 }
 

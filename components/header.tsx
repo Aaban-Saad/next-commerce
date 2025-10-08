@@ -109,12 +109,12 @@ export function Header() {
               ))
             )}
             
-            <Link 
+            {/* <Link 
               href="/sale" 
               className="px-3 py-2 text-sm font-medium text-destructive hover:bg-accent hover:text-accent-foreground rounded-md transition-colors"
             >
               Sale
-            </Link>
+            </Link> */}
           </nav>
 
           {/* Search Bar */}

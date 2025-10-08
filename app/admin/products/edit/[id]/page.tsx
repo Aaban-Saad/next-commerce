@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 
 interface Category {
@@ -24,16 +24,6 @@ interface ProductForm {
     url: string;
     alt: string;
     isPrimary: boolean;
-  }>;
-  variants: Array<{
-    name: string;
-    size: string;
-    color: string;
-    sku: string;
-    price: number;
-    originalPrice: number;
-    inventory: number;
-    isActive: boolean;
   }>;
   tags: string[];
   inventory: number;
@@ -58,11 +48,14 @@ interface ProductForm {
   };
 }
 
-export default function AddProduct() {
+export default function EditProduct() {
   const router = useRouter();
+  const params = useParams();
+  const productId = params.id as string;
+  
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState<ProductForm>({
@@ -75,7 +68,6 @@ export default function AddProduct() {
     category: '',
     subcategory: '',
     images: [{ url: '', alt: '', isPrimary: true }],
-    variants: [],
     tags: [],
     inventory: 0,
     status: 'draft',
@@ -100,8 +92,9 @@ export default function AddProduct() {
   const [newKeyword, setNewKeyword] = useState('');
 
   useEffect(() => {
+    loadProduct();
     loadCategories();
-  }, []);
+  }, [productId]);
 
   useEffect(() => {
     if (formData.category) {
@@ -110,17 +103,6 @@ export default function AddProduct() {
       setSubcategories([]);
     }
   }, [formData.category]);
-
-  // Auto-generate slug from name
-  useEffect(() => {
-    if (formData.name && !formData.slug) {
-      const slug = formData.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-      setFormData(prev => ({ ...prev, slug }));
-    }
-  }, [formData.name]);
 
   const loadCategories = async () => {
     try {
@@ -146,29 +128,48 @@ export default function AddProduct() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-
+  const loadProduct = async () => {
     try {
-      const response = await fetch('/api/admin/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
+      setLoading(true);
+      const response = await fetch(`/api/admin/products/${productId}`);
       const result = await response.json();
+
       if (result.success) {
-        alert('Product created successfully!');
-        router.push('/admin/products');
+        const product = result.data;
+        setFormData({
+          name: product.name,
+          slug: product.slug,
+          description: product.description,
+          shortDescription: product.shortDescription || '',
+          price: product.price,
+          originalPrice: product.originalPrice || 0,
+          category: product.category._id || product.category,
+          subcategory: product.subcategory?._id || product.subcategory || '',
+          images: product.images.length > 0 ? product.images : [{ url: '', alt: '', isPrimary: true }],
+          tags: product.tags || [],
+          inventory: product.inventory,
+          status: product.status,
+          featured: product.featured,
+          isNew: product.isNew,
+          isSale: product.isSale,
+          weight: product.weight || 0,
+          dimensions: product.dimensions || { length: 0, width: 0, height: 0 },
+          specifications: product.specifications.length > 0 ? product.specifications : [{ name: '', value: '' }],
+          seo: {
+            title: product.seo?.title || '',
+            description: product.seo?.description || '',
+            keywords: product.seo?.keywords || []
+          }
+        });
       } else {
-        alert('Error creating product: ' + result.error);
+        alert('Product not found');
+        router.push('/admin/products');
       }
     } catch (error) {
-      console.error('Error creating product:', error);
-      alert('Error creating product');
+      console.error('Error loading product:', error);
+      alert('Error loading product');
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   };
 
@@ -258,45 +259,48 @@ export default function AddProduct() {
     }));
   };
 
-  // Variant management functions
-  const addVariant = () => {
-    setFormData(prev => ({
-      ...prev,
-      variants: [...prev.variants, { 
-        name: '', 
-        size: '', 
-        color: '', 
-        sku: '', 
-        price: 0, 
-        originalPrice: 0, 
-        inventory: 0, 
-        isActive: true 
-      }]
-    }));
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+
+    try {
+      const response = await fetch(`/api/admin/products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert('Product updated successfully!');
+        router.push('/admin/products');
+      } else {
+        alert('Error updating product: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error updating product:', error);
+      alert('Error updating product');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const removeVariant = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      variants: prev.variants.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateVariant = (index: number, field: string, value: string | number | boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      variants: prev.variants.map((variant, i) => 
-        i === index ? { ...variant, [field]: value } : variant
-      )
-    }));
-  };
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Add New Product</h1>
-          <p className="text-gray-600 mt-1">Create a new product in your catalog</p>
+          <h1 className="text-3xl font-bold">Edit Product</h1>
+          <p className="text-gray-600 mt-1">Update product information</p>
         </div>
         <Link
           href="/admin/products"
@@ -493,144 +497,9 @@ export default function AddProduct() {
           </button>
         </div>
 
-        {/* Product Variants */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Product Variants</h2>
-            <button
-              type="button"
-              onClick={addVariant}
-              className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-            >
-              Add Variant
-            </button>
-          </div>
-          
-          {formData.variants.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <p>No variants added. Click "Add Variant" to create size/color variations.</p>
-            </div>
-          ) : (
-            formData.variants.map((variant, index) => (
-              <div key={index} className="border rounded-lg p-4 mb-4">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-medium">Variant {index + 1}</h3>
-                  <button
-                    type="button"
-                    onClick={() => removeVariant(index)}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    Remove Variant
-                  </button>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Variant Name *</label>
-                    <input
-                      type="text"
-                      value={variant.name}
-                      onChange={(e) => updateVariant(index, 'name', e.target.value)}
-                      placeholder="e.g., Red Large"
-                      className="w-full p-2 border rounded"
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Size</label>
-                    <input
-                      type="text"
-                      value={variant.size}
-                      onChange={(e) => updateVariant(index, 'size', e.target.value)}
-                      placeholder="e.g., L, XL, 42"
-                      className="w-full p-2 border rounded"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Color</label>
-                    <input
-                      type="text"
-                      value={variant.color}
-                      onChange={(e) => updateVariant(index, 'color', e.target.value)}
-                      placeholder="e.g., Red, Blue"
-                      className="w-full p-2 border rounded"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">SKU</label>
-                    <input
-                      type="text"
-                      value={variant.sku}
-                      onChange={(e) => updateVariant(index, 'sku', e.target.value)}
-                      placeholder="e.g., SHIRT-RED-L"
-                      className="w-full p-2 border rounded"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Price *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={variant.price}
-                      onChange={(e) => updateVariant(index, 'price', parseFloat(e.target.value))}
-                      className="w-full p-2 border rounded"
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Original Price</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={variant.originalPrice}
-                      onChange={(e) => updateVariant(index, 'originalPrice', parseFloat(e.target.value))}
-                      className="w-full p-2 border rounded"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Inventory</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={variant.inventory}
-                      onChange={(e) => updateVariant(index, 'inventory', parseInt(e.target.value))}
-                      className="w-full p-2 border rounded"
-                    />
-                  </div>
-                </div>
-                
-                <div className="flex items-center">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={variant.isActive}
-                      onChange={(e) => updateVariant(index, 'isActive', e.target.checked)}
-                      className="mr-2"
-                    />
-                    Active Variant
-                  </label>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
         {/* Inventory & Status */}
         <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Base Inventory & Status</h2>
-          <p className="text-sm text-gray-600 mb-4">
-            Base inventory applies when no variants are used. If variants exist, their individual inventories will be used instead.
-          </p>
+          <h2 className="text-xl font-semibold mb-4">Inventory & Status</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
@@ -734,182 +603,6 @@ export default function AddProduct() {
           </div>
         </div>
 
-        {/* Specifications */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Specifications</h2>
-          
-          {formData.specifications.map((spec, index) => (
-            <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <input
-                type="text"
-                value={spec.name}
-                onChange={(e) => updateSpecification(index, 'name', e.target.value)}
-                placeholder="Specification name"
-                className="p-2 border rounded"
-              />
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={spec.value}
-                  onChange={(e) => updateSpecification(index, 'value', e.target.value)}
-                  placeholder="Specification value"
-                  className="flex-1 p-2 border rounded"
-                />
-                {formData.specifications.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeSpecification(index)}
-                    className="text-red-600 hover:text-red-800 px-2"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-          
-          <button
-            type="button"
-            onClick={addSpecification}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            Add Specification
-          </button>
-        </div>
-
-        {/* Physical Properties */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Physical Properties</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Weight (kg)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.weight}
-                onChange={(e) => setFormData(prev => ({ ...prev, weight: parseFloat(e.target.value) }))}
-                className="w-full p-2 border rounded"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">Length (cm)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.dimensions.length}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  dimensions: { ...prev.dimensions, length: parseFloat(e.target.value) }
-                }))}
-                className="w-full p-2 border rounded"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">Width (cm)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.dimensions.width}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  dimensions: { ...prev.dimensions, width: parseFloat(e.target.value) }
-                }))}
-                className="w-full p-2 border rounded"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">Height (cm)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.dimensions.height}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  dimensions: { ...prev.dimensions, height: parseFloat(e.target.value) }
-                }))}
-                className="w-full p-2 border rounded"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* SEO */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">SEO Settings</h2>
-          
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">SEO Title</label>
-            <input
-              type="text"
-              value={formData.seo.title}
-              onChange={(e) => setFormData(prev => ({ 
-                ...prev, 
-                seo: { ...prev.seo, title: e.target.value }
-              }))}
-              className="w-full p-2 border rounded"
-            />
-          </div>
-          
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">SEO Description</label>
-            <textarea
-              value={formData.seo.description}
-              onChange={(e) => setFormData(prev => ({ 
-                ...prev, 
-                seo: { ...prev.seo, description: e.target.value }
-              }))}
-              className="w-full p-2 border rounded h-20"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-2">SEO Keywords</label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {formData.seo.keywords.map((keyword, index) => (
-                <span
-                  key={index}
-                  className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center"
-                >
-                  {keyword}
-                  <button
-                    type="button"
-                    onClick={() => removeKeyword(keyword)}
-                    className="ml-2 text-green-600 hover:text-green-800"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-            
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newKeyword}
-                onChange={(e) => setNewKeyword(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addKeyword())}
-                placeholder="Add SEO keyword"
-                className="flex-1 p-2 border rounded"
-              />
-              <button
-                type="button"
-                onClick={addKeyword}
-                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-              >
-                Add Keyword
-              </button>
-            </div>
-          </div>
-        </div>
-
         {/* Submit Button */}
         <div className="flex justify-end space-x-4">
           <Link
@@ -923,7 +616,7 @@ export default function AddProduct() {
             disabled={saving}
             className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
-            {saving ? 'Creating Product...' : 'Create Product'}
+            {saving ? 'Updating Product...' : 'Update Product'}
           </button>
         </div>
       </form>
