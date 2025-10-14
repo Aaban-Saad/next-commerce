@@ -15,7 +15,7 @@ interface Category {
   description: string;
   image: string;
   parentCategory: Category | null;
-  subcategories: Category[];
+  subcategories: string[];
   isActive: boolean;
   sortOrder: number;
   seoTitle: string;
@@ -36,7 +36,8 @@ export function Header() {
         const response = await fetch('/api/categories')
         if (response.ok) {
           const data = await response.json()
-          setCategories(data.categories || [])
+          console.log('Fetched categories:', data.data)
+          setCategories(data.data || [])
         } else {
           console.error('Failed to fetch categories')
         }
@@ -51,7 +52,10 @@ export function Header() {
   }, [])
 
   // Filter only parent categories (no parentCategory)
+  console.log('All categories:', categories)
   const parentCategories = categories.filter(cat => !cat.parentCategory)
+
+  console.log('Parent categories:', parentCategories)
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -79,36 +83,43 @@ export function Header() {
                   onMouseLeave={() => setHoveredCategory(null)}
                 >
                   <button className="flex items-center space-x-1 px-3 py-2 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
-                    <span>{category.name}</span>
+                    <Link
+                      href={`/category/${category.slug}`}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      {category.name}
+                    </Link>
                     {category.subcategories.length > 0 && <ChevronDown className="h-4 w-4" />}
                   </button>
-                  
+
                   {/* Dropdown for subcategories */}
                   {category.subcategories.length > 0 && (
-                    <div 
-                      className={`absolute top-full left-0 mt-1 w-[500px] bg-popover text-popover-foreground border rounded-md shadow-lg z-50 transition-all duration-200 ${
-                        hoveredCategory === category._id 
-                          ? 'opacity-100 visible translate-y-0' 
-                          : 'opacity-0 invisible -translate-y-2'
-                      }`}
+                    <div
+                      className={`absolute top-full left-0 mt-1 w-[500px] bg-popover text-popover-foreground border rounded-md shadow-lg z-50 transition-all duration-200 ${hoveredCategory === category._id
+                        ? 'opacity-100 visible translate-y-0'
+                        : 'opacity-0 invisible -translate-y-2'
+                        }`}
                     >
                       <div className="grid grid-cols-2 gap-1 p-4">
-                        {category.subcategories.map((subcat) => (
-                          <Link
-                            key={subcat._id}
-                            href={`/category/${subcat.slug}`}
-                            className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
-                          >
-                            {subcat.name}
-                          </Link>
-                        ))}
+                        {category.subcategories.map((subcatId) => {
+                          const subcat = categories.find(cat => cat._id === subcatId);
+                          return subcat ? (
+                            <Link
+                              key={`${category._id}-${subcat._id}`}
+                              href={`/category/${subcat.slug}`}
+                              className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+                            >
+                              {subcat.name}
+                            </Link>
+                          ) : null;
+                        })}
                       </div>
                     </div>
                   )}
                 </div>
               ))
             )}
-            
+
             {/* <Link 
               href="/sale" 
               className="px-3 py-2 text-sm font-medium text-destructive hover:bg-accent hover:text-accent-foreground rounded-md transition-colors"
@@ -167,7 +178,7 @@ export function Header() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-[300px] sm:w-[400px]">
-                <div className="flex flex-col space-y-4 mt-8">
+                <div className="flex flex-col space-y-4 mt-8 ml-4">
                   {loading ? (
                     <div className="space-y-4">
                       <div className="h-6 bg-gray-200 animate-pulse rounded w-24"></div>
@@ -186,28 +197,31 @@ export function Header() {
                         </Link>
                         {category.subcategories.length > 0 && (
                           <div className="grid grid-cols-2 gap-2 pl-4">
-                            {category.subcategories.map((subcat) => (
-                              <Link
-                                key={subcat._id}
-                                href={`/category/${subcat.slug}`}
-                                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                                onClick={() => setIsMobileMenuOpen(false)}
-                              >
-                                {subcat.name}
-                              </Link>
-                            ))}
+                            {category.subcategories.map((subcatId) => {
+                              const subcat = categories.find(cat => cat._id === subcatId);
+                              return subcat ? (
+                                <Link
+                                  key={subcat._id}
+                                  href={`/category/${subcat.slug}`}
+                                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                                  onClick={() => setIsMobileMenuOpen(false)}
+                                >
+                                  {subcat.name}
+                                </Link>
+                              ) : null;
+                            })}
                           </div>
                         )}
                       </div>
                     ))
                   )}
-                  <Link
+                  {/* <Link
                     href="/sale"
                     className="text-lg font-semibold text-destructive"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Sale
-                  </Link>
+                  </Link> */}
                 </div>
               </SheetContent>
             </Sheet>

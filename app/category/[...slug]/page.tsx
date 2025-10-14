@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Grid, List, Filter, SlidersHorizontal } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import React from "react"
 
 // Mock product data
 const mockProducts = [
@@ -107,14 +108,15 @@ const mockProducts = [
   },
 ]
 
-export default function CategoryPage({ params }: { params: { slug: string[] } }) {
+export default function CategoryPage({ params }: { params: Promise<{ slug: string[] }> }) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [sortBy, setSortBy] = useState("featured")
-  const [filters, setFilters] = useState({})
+  const [filters, setFilters] = useState<{ categories?: string[]; brands?: string[]; priceRange?: [number, number]; inStockOnly?: boolean }>({})
   const [isFilterOpen, setIsFilterOpen] = useState(false)
 
-  const categoryName = params.slug[0] || "all"
-  const subcategoryName = params.slug[1] || ""
+  const { slug } = React.use(params)
+  const categoryName = slug[0] || "all"
+  const subcategoryName = slug[1] || ""
 
   const breadcrumbItems = [
     { label: "Shop", href: "/category" },
@@ -133,16 +135,15 @@ export default function CategoryPage({ params }: { params: { slug: string[] } })
     let filtered = mockProducts
 
     // Apply filters
-    if (filters.categories?.length > 0) {
-      filtered = filtered.filter((product) => filters.categories.includes(product.category))
+    if ((filters.categories ?? []).length > 0) {
+      filtered = filtered.filter((product) => (filters.categories ?? []).includes(product.category))
     }
-    if (filters.brands?.length > 0) {
-      filtered = filtered.filter((product) => filters.brands.includes(product.brand))
+    if ((filters.brands ?? []).length > 0) {
+      filtered = filtered.filter((product) => (filters.brands ?? []).includes(product.brand))
     }
     if (filters.priceRange) {
-      filtered = filtered.filter(
-        (product) => product.price >= filters.priceRange[0] && product.price <= filters.priceRange[1],
-      )
+      const [min, max] = filters.priceRange as [number, number]
+      filtered = filtered.filter((product) => product.price >= min && product.price <= max)
     }
     if (filters.inStockOnly) {
       filtered = filtered.filter((product) => product.inStock)
