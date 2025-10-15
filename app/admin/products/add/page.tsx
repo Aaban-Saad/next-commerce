@@ -146,15 +146,145 @@ export default function AddProduct() {
     }
   };
 
+  const updateImage = (index: number, field: string, value: string | boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.map((img, i) => {
+        if (i === index) return { ...img, [field]: value };
+        if (field === 'isPrimary' && value === true) return { ...img, isPrimary: false };
+        return img;
+      })
+    }));
+  };
+
+  const addImage = () => {
+    setFormData(prev => ({
+      ...prev,
+      images: [...prev.images, { url: '', alt: '', isPrimary: prev.images.length === 0 }]
+    }));
+  };
+
+  const removeImage = (index: number) => {
+    setFormData(prev => {
+      const imgs = prev.images.filter((_, i) => i !== index);
+      if (!imgs.some(img => img.isPrimary) && imgs.length > 0) imgs[0].isPrimary = true;
+      return { ...prev, images: imgs };
+    });
+  };
+
+  const addTag = () => {
+    if (!newTag.trim()) return;
+    setFormData(prev => ({ ...prev, tags: Array.from(new Set([...prev.tags, newTag.trim().toLowerCase()])) }));
+    setNewTag('');
+  };
+
+  const removeTag = (tag: string) => {
+    setFormData(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }));
+  };
+
+  const addKeyword = () => {
+    if (!newKeyword.trim()) return;
+    setFormData(prev => ({ ...prev, seo: { ...prev.seo, keywords: Array.from(new Set([...prev.seo.keywords, newKeyword.trim().toLowerCase()])) } }));
+    setNewKeyword('');
+  };
+
+  const removeKeyword = (keyword: string) => {
+    setFormData(prev => ({ ...prev, seo: { ...prev.seo, keywords: prev.seo.keywords.filter(k => k !== keyword) } }));
+  };
+
+  const addSpecification = () => {
+    setFormData(prev => ({ ...prev, specifications: [...prev.specifications, { name: '', value: '' }] }));
+  };
+
+  const removeSpecification = (index: number) => {
+    setFormData(prev => ({ ...prev, specifications: prev.specifications.filter((_, i) => i !== index) }));
+  };
+
+  const updateSpecification = (index: number, field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      specifications: prev.specifications.map((spec, i) => i === index ? { ...spec, [field]: value } : spec)
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
 
     try {
+      // Basic validation
+      if (!formData.name.trim()) throw new Error('Product name is required');
+      if (!formData.description.trim()) throw new Error('Product description is required');
+      if (!formData.category) throw new Error('Category is required');
+      if (Number.isNaN(Number(formData.price)) || Number(formData.price) < 0) throw new Error('Price must be a non-negative number');
+
+      // Ensure at least one image and one primary image
+      const images = formData.images.filter(img => img.url && img.url.trim() !== '');
+      if (images.length === 0) throw new Error('At least one image URL is required');
+      if (!images.some(img => img.isPrimary)) images[0].isPrimary = true;
+
+      // Sanitize tags and keywords
+      const tags = Array.from(new Set(formData.tags.map(t => t.trim().toLowerCase()).filter(Boolean)));
+      const keywords = Array.from(new Set(formData.seo.keywords.map(k => k.trim().toLowerCase()).filter(Boolean)));
+
+      // Sanitize specifications
+      const specifications = formData.specifications
+        .map(s => ({ name: s.name.trim(), value: s.value.trim() }))
+        .filter(s => s.name && s.value);
+
+      // Sanitize variants (ensure numeric values and defaults)
+      const variants = formData.variants.map(variant => ({
+        name: variant.name.trim(),
+        size: variant.size.trim(),
+        color: variant.color.trim(),
+        sku: variant.sku.trim() || undefined,
+        price: Number(variant.price) || 0,
+        originalPrice: variant.originalPrice ? Number(variant.originalPrice) : undefined,
+        inventory: Number(variant.inventory) || 0,
+        isActive: Boolean(variant.isActive)
+      }));
+
+      // Compute product-level inventory: sum of variant inventories if variants exist, otherwise use base inventory
+      const inventory = variants.length > 0
+        ? variants.reduce((sum, v) => sum + (Number(v.inventory) || 0), 0)
+        : Number(formData.inventory) || 0;
+
+      // Build payload matching the Product schema
+      const payload = {
+        name: formData.name.trim(),
+        slug: formData.slug.trim() || undefined,
+        description: formData.description.trim(),
+        shortDescription: formData.shortDescription.trim() || undefined,
+        price: Number(formData.price) || 0,
+        originalPrice: formData.originalPrice ? Number(formData.originalPrice) : undefined,
+        category: formData.category || undefined,
+        subcategory: formData.subcategory || undefined,
+        images: images.map(img => ({ url: img.url.trim(), alt: img.alt?.trim() || '', isPrimary: Boolean(img.isPrimary) })),
+        variants,
+        tags,
+        specifications,
+        inventory,
+        status: formData.status,
+        featured: Boolean(formData.featured),
+        isNew: Boolean(formData.isNew),
+        isSale: Boolean(formData.isSale),
+        weight: formData.weight ? Number(formData.weight) : undefined,
+        dimensions: {
+          length: formData.dimensions.length ? Number(formData.dimensions.length) : undefined,
+          width: formData.dimensions.width ? Number(formData.dimensions.width) : undefined,
+          height: formData.dimensions.height ? Number(formData.dimensions.height) : undefined,
+        },
+        seo: {
+          title: formData.seo.title?.trim() || undefined,
+          description: formData.seo.description?.trim() || undefined,
+          keywords
+        }
+      };
+
       const response = await fetch('/api/admin/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
 
       const result = await response.json();
@@ -162,103 +292,16 @@ export default function AddProduct() {
         alert('Product created successfully!');
         router.push('/admin/products');
       } else {
-        alert('Error creating product: ' + result.error);
+        throw new Error(result.error || 'Unknown error');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating product:', error);
-      alert('Error creating product');
+      alert(error.message || 'Error creating product');
     } finally {
       setSaving(false);
     }
   };
 
-  const addImage = () => {
-    setFormData(prev => ({
-      ...prev,
-      images: [...prev.images, { url: '', alt: '', isPrimary: false }]
-    }));
-  };
-
-  const removeImage = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateImage = (index: number, field: string, value: string | boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      images: prev.images.map((img, i) => 
-        i === index ? { ...img, [field]: value } : img
-      )
-    }));
-  };
-
-  const addTag = () => {
-    if (newTag.trim() && !formData.tags.includes(newTag.trim().toLowerCase())) {
-      setFormData(prev => ({
-        ...prev,
-        tags: [...prev.tags, newTag.trim().toLowerCase()]
-      }));
-      setNewTag('');
-    }
-  };
-
-  const removeTag = (tagToRemove: string) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
-    }));
-  };
-
-  const addKeyword = () => {
-    if (newKeyword.trim() && !formData.seo.keywords.includes(newKeyword.trim().toLowerCase())) {
-      setFormData(prev => ({
-        ...prev,
-        seo: {
-          ...prev.seo,
-          keywords: [...prev.seo.keywords, newKeyword.trim().toLowerCase()]
-        }
-      }));
-      setNewKeyword('');
-    }
-  };
-
-  const removeKeyword = (keywordToRemove: string) => {
-    setFormData(prev => ({
-      ...prev,
-      seo: {
-        ...prev.seo,
-        keywords: prev.seo.keywords.filter(keyword => keyword !== keywordToRemove)
-      }
-    }));
-  };
-
-  const addSpecification = () => {
-    setFormData(prev => ({
-      ...prev,
-      specifications: [...prev.specifications, { name: '', value: '' }]
-    }));
-  };
-
-  const removeSpecification = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      specifications: prev.specifications.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateSpecification = (index: number, field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      specifications: prev.specifications.map((spec, i) => 
-        i === index ? { ...spec, [field]: value } : spec
-      )
-    }));
-  };
-
-  // Variant management functions
   const addVariant = () => {
     setFormData(prev => ({
       ...prev,

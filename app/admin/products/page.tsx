@@ -47,6 +47,7 @@ export default function ProductsAdmin() {
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState('newest');
@@ -55,19 +56,29 @@ export default function ProductsAdmin() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState<number | 'all'>(10);
 
   useEffect(() => {
     loadProducts();
+  }, [currentPage, searchTerm, categoryFilter, statusFilter, sortBy, itemsPerPage]);
+
+  // Load categories once on mount
+  useEffect(() => {
     loadCategories();
-  }, [currentPage, searchTerm, categoryFilter, statusFilter, sortBy]);
+  }, []);
+
+  // Reset to first page when filters or itemsPerPage change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [categoryFilter, statusFilter, sortBy, itemsPerPage]);
 
   const loadProducts = async () => {
     try {
       setLoading(true);
+      const limitValue = itemsPerPage === 'all' ? '10000' : String(itemsPerPage);
       const params = new URLSearchParams({
         page: currentPage.toString(),
-        limit: itemsPerPage.toString(),
+        limit: limitValue,
         sortBy,
         ...(searchTerm && { search: searchTerm }),
         ...(categoryFilter && { category: categoryFilter }),
@@ -174,6 +185,11 @@ export default function ProductsAdmin() {
     }
   };
 
+  // Numeric helpers for pagination (handles itemsPerPage === 'all')
+  const itemsPerPageNumber = itemsPerPage === 'all' ? (totalCount || 0) : Number(itemsPerPage);
+  const startIndex = totalCount === 0 ? 0 : ((currentPage - 1) * itemsPerPageNumber) + 1;
+  const endIndex = itemsPerPage === 'all' ? totalCount : Math.min(currentPage * itemsPerPageNumber, totalCount);
+
   if (loading && products.length === 0) {
     return (
       <div className="max-w-7xl mx-auto p-6">
@@ -206,9 +222,10 @@ export default function ProductsAdmin() {
             <label className="block text-sm font-medium mb-2">Search Products</label>
             <input
               type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name, description..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by name, description... (press Enter to search immediately)"
+              onKeyDown={(e) => { if (e.key === 'Enter') { setSearchTerm(searchInput); setCurrentPage(1); } }}
               className="w-full p-2 border rounded-lg"
             />
           </div>
@@ -256,6 +273,21 @@ export default function ProductsAdmin() {
               <option value="name">Name A-Z</option>
               <option value="price-low">Price: Low to High</option>
               <option value="price-high">Price: High to Low</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-2">Items per page</label>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => setItemsPerPage(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              className="w-full p-2 border rounded-lg"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={'all'}>All</option>
             </select>
           </div>
         </div>
@@ -416,7 +448,7 @@ export default function ProductsAdmin() {
       {totalPages > 1 && (
         <div className="flex justify-between items-center mt-6">
           <div className="text-sm text-gray-600">
-            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount} products
+            Showing {startIndex} to {endIndex} of {totalCount} products
           </div>
           
           <div className="flex space-x-2">

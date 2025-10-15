@@ -7,12 +7,11 @@ import Category from '@/models/Categories';
 export async function GET(request: NextRequest) {
   try {
     await dbConnect();
-    
+
     const { searchParams } = new URL(request.url);
-    
-    // Query parameters
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50);
+
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '10', 10), 50);
     const sortBy = searchParams.get('sortBy') || 'newest';
     const category = searchParams.get('category');
     const status = searchParams.get('status');
@@ -20,32 +19,14 @@ export async function GET(request: NextRequest) {
     const featured = searchParams.get('featured');
     const isNew = searchParams.get('isNew');
     const isSale = searchParams.get('isSale');
-    
-    // Build filter object
+
     const filter: any = {};
-    
-    // Status filter (admin can see all statuses)
-    if (status) {
-      filter.status = status;
-    }
-    
-    // Category filter
-    if (category) {
-      filter.category = category;
-    }
-    
-    // Boolean filters
-    if (featured === 'true') {
-      filter.featured = true;
-    }
-    if (isNew === 'true') {
-      filter.isNew = true;
-    }
-    if (isSale === 'true') {
-      filter.isSale = true;
-    }
-    
-    // Search filter
+    if (status) filter.status = status;
+    if (category) filter.category = category;
+    if (featured === 'true') filter.featured = true;
+    if (isNew === 'true') filter.isNew = true;
+    if (isSale === 'true') filter.isSale = true;
+
     if (search) {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
@@ -54,9 +35,8 @@ export async function GET(request: NextRequest) {
         { tags: { $in: [new RegExp(search, 'i')] } }
       ];
     }
-    
-    // Build sort object
-    let sort: any = {};
+
+    let sort: any = { createdAt: -1 };
     switch (sortBy) {
       case 'newest':
         sort = { createdAt: -1 };
@@ -73,30 +53,23 @@ export async function GET(request: NextRequest) {
       case 'price-high':
         sort = { price: -1 };
         break;
-      default:
-        sort = { createdAt: -1 };
     }
-    
-    // Calculate pagination
+
     const skip = (page - 1) * limit;
-    
-    // Execute query with population
+
     const [products, totalCount] = await Promise.all([
       Product.find(filter)
-        .populate('category', 'name slug')
-        .populate('subcategory', 'name slug')
+        .populate({ path: 'category', model: 'Category', select: 'name slug' })
+        .populate({ path: 'subcategory', model: 'Category', select: 'name slug' })
         .sort(sort)
         .skip(skip)
         .limit(limit)
         .lean(),
       Product.countDocuments(filter)
     ]);
-    
-    // Calculate pagination info
+
     const totalPages = Math.ceil(totalCount / limit);
-    const hasNextPage = page < totalPages;
-    const hasPrevPage = page > 1;
-    
+
     return NextResponse.json({
       success: true,
       data: products,
@@ -105,16 +78,13 @@ export async function GET(request: NextRequest) {
         totalPages,
         totalCount,
         limit,
-        hasNextPage,
-        hasPrevPage
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
       }
     });
   } catch (error) {
     console.error('Error fetching products (admin):', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch products' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'Failed to fetch products' }, { status: 500 });
   }
 }
 
@@ -122,112 +92,168 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await dbConnect();
-    
-    const data = await request.json();
-    
-    // Validate required fields
-    if (!data.name || !data.description || !data.price || !data.category) {
-      return NextResponse.json(
-        { success: false, error: 'Missing required fields: name, description, price, category' },
-        { status: 400 }
-      );
+
+    const payload: any = await request.json();
+
+    if (!payload || typeof payload !== 'object') {
+      return NextResponse.json({ success: false, error: 'Invalid payload' }, { status: 400 });
     }
 
-    // Check if slug already exists
-    if (data.slug) {
-      const existingProduct = await Product.findOne({ slug: data.slug });
-      if (existingProduct) {
-        return NextResponse.json(
-          { success: false, error: 'A product with this slug already exists' },
-          { status: 400 }
-        );
-      }
-    }
-    
-    // Generate slug if not provided
-    let slug = data.slug;
-    if (!slug && data.name) {
-      slug = data.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-        
-      // Check if generated slug exists
-      const existingProduct = await Product.findOne({ slug });
-      if (existingProduct) {
-        slug = `${slug}-${Date.now()}`;
-      }
+    if (!payload.name || !String(payload.name).trim()) {
+      return NextResponse.json({ success: false, error: 'Missing required field: name' }, { status: 400 });
     }
 
-    // Ensure at least one image has isPrimary set
-    if (data.images && data.images.length > 0) {
-      const hasPrimary = data.images.some((img: any) => img.isPrimary);
-      if (!hasPrimary) {
-        data.images[0].isPrimary = true;
+    if (!payload.description || !String(payload.description).trim()) {
+      return NextResponse.json({ success: false, error: 'Missing required field: description' }, { status: 400 });
+    }
+
+    if (payload.price === undefined || payload.price === null || isNaN(Number(payload.price)) || Number(payload.price) < 0) {
+      return NextResponse.json({ success: false, error: 'Missing or invalid required field: price (must be >= 0)' }, { status: 400 });
+    }
+
+    if (!payload.category || !String(payload.category).trim()) {
+      return NextResponse.json({ success: false, error: 'Missing required field: category' }, { status: 400 });
+    }
+
+    // Verify category exists
+    const categoryExists = await Category.findById(String(payload.category)).lean();
+    if (!categoryExists) {
+      return NextResponse.json({ success: false, error: 'Category not found' }, { status: 400 });
+    }
+
+    // If subcategory provided, verify it exists
+    if (payload.subcategory) {
+      const subExists = await Category.findById(String(payload.subcategory)).lean();
+      if (!subExists) {
+        return NextResponse.json({ success: false, error: 'Subcategory not found' }, { status: 400 });
       }
     }
 
-    // Filter out empty specifications
-    if (data.specifications) {
-      data.specifications = data.specifications.filter(
-        (spec: any) => spec.name?.trim() && spec.value?.trim()
-      );
+    // Normalize images
+    let images: any[] = [];
+    if (Array.isArray(payload.images)) {
+      images = payload.images
+        .map((img: any) => ({
+          url: img?.url ? String(img.url).trim() : '',
+          alt: img?.alt ? String(img.alt).trim() : '',
+          isPrimary: Boolean(img?.isPrimary)
+        }))
+        .filter((img: any) => !!img.url);
     }
 
-    // Handle variants - only include if we have valid variants
+    if (images.length === 0) {
+      return NextResponse.json({ success: false, error: 'At least one image with a valid url is required' }, { status: 400 });
+    }
+
+    // Ensure one primary image
+    const primaryIndex = images.findIndex((img: any) => img.isPrimary);
+    images = images.map((img: any, i: number) => ({ ...img, isPrimary: i === (primaryIndex >= 0 ? primaryIndex : 0) }));
+
+    // Tags
+    const tags: string[] = Array.isArray(payload.tags)
+      ? Array.from(new Set(payload.tags.map((t: any) => String(t).trim().toLowerCase()).filter(Boolean)))
+      : [];
+
+    // SEO keywords
+    const seoKeywords: string[] = Array.isArray(payload.seo?.keywords)
+      ? Array.from(new Set(payload.seo.keywords.map((k: any) => String(k).trim().toLowerCase()).filter(Boolean)))
+      : [];
+
+    // Specifications
+    const specifications: any[] = Array.isArray(payload.specifications)
+      ? payload.specifications
+          .map((s: any) => ({ name: s?.name ? String(s.name).trim() : '', value: s?.value ? String(s.value).trim() : '' }))
+          .filter((s: any) => s.name && s.value)
+      : [];
+
+    // Variants
+    let parsedVariants: any[] = [];
+    if (Array.isArray(payload.variants)) {
+      parsedVariants = payload.variants
+        .map((v: any) => ({
+          name: v?.name ? String(v.name).trim() : '',
+          size: v?.size ? String(v.size).trim() : '',
+          color: v?.color ? String(v.color).trim() : '',
+          sku: v?.sku ? String(v.sku).trim() : undefined,
+          price: v?.price !== undefined && v?.price !== null ? Number(v.price) : undefined,
+          originalPrice: v?.originalPrice !== undefined && v?.originalPrice !== null ? Number(v.originalPrice) : undefined,
+          inventory: v?.inventory !== undefined && v?.inventory !== null ? Number(v.inventory) : 0,
+          isActive: v?.isActive === undefined ? true : Boolean(v.isActive)
+        }))
+        .filter((v: any) => v.name && v.price !== undefined && !isNaN(v.price) && v.price >= 0 && v.inventory >= 0);
+    }
+
+    // Inventory calculation
+    const inventory = parsedVariants.length > 0
+      ? parsedVariants.reduce((sum, v) => sum + (Number(v.inventory) || 0), 0)
+      : (payload.inventory !== undefined && payload.inventory !== null ? Number(payload.inventory) : 0);
+
+    // Slug generation and uniqueness
+    let slug = payload.slug && String(payload.slug).trim() ? String(payload.slug).trim().toLowerCase() : '';
+    if (!slug) {
+      slug = String(payload.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    }
+
+    const slugCollision = await Product.findOne({ slug }).lean();
+    if (slugCollision) slug = `${slug}-${Date.now()}`;
+
+    const price = Number(payload.price);
+    const originalPrice = payload.originalPrice !== undefined && payload.originalPrice !== null ? Number(payload.originalPrice) : undefined;
+    const weight = payload.weight !== undefined && payload.weight !== null ? Number(payload.weight) : undefined;
+    const dimensions = {
+      length: payload.dimensions?.length !== undefined && payload.dimensions?.length !== null ? Number(payload.dimensions.length) : undefined,
+      width: payload.dimensions?.width !== undefined && payload.dimensions?.width !== null ? Number(payload.dimensions.width) : undefined,
+      height: payload.dimensions?.height !== undefined && payload.dimensions?.height !== null ? Number(payload.dimensions.height) : undefined
+    };
+
+    const allowedStatuses = ['draft', 'active', 'inactive', 'out-of-stock'];
+    const status = allowedStatuses.includes(payload.status) ? payload.status : 'draft';
+
     const productData: any = {
-      ...data,
+      name: String(payload.name).trim(),
       slug,
-      tags: data.tags?.map((tag: string) => tag.toLowerCase()) || [],
+      description: String(payload.description).trim(),
+      shortDescription: payload.shortDescription ? String(payload.shortDescription).trim() : undefined,
+      images,
+      category: String(payload.category),
+      subcategory: payload.subcategory ? String(payload.subcategory) : undefined,
+      price,
+      originalPrice,
+      tags,
+      specifications,
+      inventory,
+      status,
+      featured: Boolean(payload.featured),
+      isNew: Boolean(payload.isNew),
+      isSale: Boolean(payload.isSale),
+      weight,
+      dimensions,
       seo: {
-        title: data.seo?.title || data.name,
-        description: data.seo?.description || data.shortDescription || data.description.substring(0, 160),
-        keywords: data.seo?.keywords || []
+        title: payload.seo?.title ? String(payload.seo.title).trim() : String(payload.name).trim(),
+        description: payload.seo?.description ? String(payload.seo.description).trim() : (String(payload.shortDescription || payload.description).substring(0, 160)),
+        keywords: seoKeywords
       }
     };
 
-    // Only add variants if we have valid ones with SKUs
-    if (data.variants && Array.isArray(data.variants)) {
-      const validVariants = data.variants.filter((variant: any) => 
-        variant.name?.trim() && variant.price > 0 && variant.sku?.trim()
-      );
-      if (validVariants.length > 0) {
-        productData.variants = validVariants;
-      }
-    }
-    
-    // Explicitly exclude variants if not provided to avoid index issues
-    if (!productData.variants) {
-      delete productData.variants;
-    }
+    if (parsedVariants.length > 0) productData.variants = parsedVariants;
 
-    // Create new product
+    if (productData.inventory === undefined || productData.inventory === null) productData.inventory = 0;
+    if (productData.price === undefined || productData.price === null) productData.price = 0;
+
     const product = new Product(productData);
-    const savedProduct = await product.save();
-    
-    // Populate the response
-    const populatedProduct = await Product.findById(savedProduct._id)
-      .populate('category', 'name slug')
-      .populate('subcategory', 'name slug');
-    
-    return NextResponse.json({
-      success: true,
-      data: populatedProduct
-    }, { status: 201 });
-  } catch (error) {
-    console.error('Error creating product:', error);
-    
-    // Handle duplicate key error (slug)
-    if ((error as any).code === 11000) {
-      return NextResponse.json(
-        { success: false, error: 'Product with this slug already exists' },
-        { status: 400 }
-      );
+    const saved = await product.save();
+
+    const populated = await Product.findById(saved._id)
+      .populate({ path: 'category', model: 'Category', select: 'name slug' })
+      .populate({ path: 'subcategory', model: 'Category', select: 'name slug' })
+      .lean();
+
+    return NextResponse.json({ success: true, data: populated }, { status: 201 });
+  } catch (err: any) {
+    console.error('Error creating product:', err);
+    if (err?.code === 11000) {
+      return NextResponse.json({ success: false, error: 'Duplicate key error (possible slug collision)' }, { status: 400 });
     }
-    
-    return NextResponse.json(
-      { success: false, error: 'Failed to create product' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'Failed to create product' }, { status: 500 });
   }
 }

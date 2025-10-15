@@ -23,8 +23,8 @@ export async function GET(
     }
     
     const product = await Product.findById(id)
-      .populate('category', 'name slug')
-      .populate('subcategory', 'name slug')
+      .populate({ path: 'category', model: 'Category', select: 'name slug' })
+      .populate({ path: 'subcategory', model: 'Category', select: 'name slug' })
       .lean();
     
     if (!product) {
@@ -134,8 +134,8 @@ export async function PUT(
       updateData,
       { new: true, runValidators: true }
     )
-      .populate('category', 'name slug')
-      .populate('subcategory', 'name slug');
+      .populate({ path: 'category', model: 'Category', select: 'name slug' })
+      .populate({ path: 'subcategory', model: 'Category', select: 'name slug' });
     
     if (!updatedProduct) {
       return NextResponse.json(
@@ -199,8 +199,8 @@ export async function PATCH(
       updateData,
       { new: true, runValidators: true }
     )
-      .populate('category', 'name slug')
-      .populate('subcategory', 'name slug');
+      .populate({ path: 'category', model: 'Category', select: 'name slug' })
+      .populate({ path: 'subcategory', model: 'Category', select: 'name slug' });
     
     if (!updatedProduct) {
       return NextResponse.json(
