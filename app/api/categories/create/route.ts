@@ -1,25 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import Category from '@/models/Categories';
-
-// MongoDB connection
-async function connectDB() {
-  if (mongoose.connections[0].readyState) {
-    return;
-  }
-  
-  try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/next-commerce');
-    console.log('MongoDB connected');
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    throw new Error('Failed to connect to MongoDB');
-  }
-}
+import dbConnect from '@/lib/mongoose';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
+    await dbConnect();
 
     const body = await request.json();
     const {
@@ -106,7 +92,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    await connectDB();
+    await dbConnect();
 
     const categories = await Category.find({ isActive: true })
       .populate('parentCategory', 'name slug')

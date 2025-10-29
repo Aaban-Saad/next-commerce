@@ -78,9 +78,10 @@ const navigationItems = [
     label: "Content Management",
     icon: FileText,
     children: [
-      { href: "/admin/pages", label: "Static Pages", icon: FileText },
-      { href: "/admin/banners", label: "Homepage Banners", icon: ImageIcon },
-      { href: "/admin/blog", label: "Blog Management", icon: PenTool },
+      { href: "/admin/content/page-sections", label: "Page Sections", icon: FileText },
+      { href: "/admin/content/page-sections/new", label: "Create Page Section", icon: Plus },
+      { href: "/admin/content/banners", label: "Homepage Banners", icon: ImageIcon },
+      { href: "/admin/content/blog", label: "Blog Management", icon: PenTool },
     ],
   },
   {

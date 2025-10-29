@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose, { InferSchemaType } from 'mongoose';
 
 // Product variant schema for size/color combinations
 const VariantSchema = new mongoose.Schema({
@@ -243,5 +243,6 @@ ProductSchema.virtual('primaryImage').get(function() {
 
 // Export models
 export const Product = mongoose.models.Product || mongoose.model('Product', ProductSchema);
+export type ProductType = InferSchemaType<typeof ProductSchema>;
 
 export default { Product };

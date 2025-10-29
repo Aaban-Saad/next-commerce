@@ -1,7 +1,7 @@
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { HeroSection } from "@/components/hero-section"
-import { DynamicProductSections } from "@/components/featured-products"
+import  DynamicProductSections  from "@/components/dynamic-product-sections"
 import { CategoryShowcase } from "@/components/category-showcase"
 
 export default function HomePage() {
