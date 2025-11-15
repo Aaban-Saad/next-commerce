@@ -116,17 +116,26 @@ export function ProductGrid({ products, viewMode, userId }: ProductGridProps) {
                 </div>
                 <div className="flex flex-col gap-2 p-4">
                   <Button
+                    type="button"
                     size="icon"
                     variant="ghost"
                     onClick={(e) => {
-                      e.stopPropagation()
-                      if (!productId) return
-                      saved ? remove(productId) : add(productId)
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!productId) return;
+                      saved ? remove(productId) : add(productId);
                     }}
-                    aria-pressed={saved}
-                    title={saved ? "Remove from wishlist" : "Add to wishlist"}
+                    className={`transition-all duration-200 ${
+                      saved 
+                        ? 'text-red-500 hover:text-red-600 animate-pulse' 
+                        : 'text-gray-400 hover:text-red-400'
+                    }`}
                   >
-                    <Heart className="h-4 w-4" />
+                    <Heart 
+                      size={16} 
+                      fill={saved ? 'currentColor' : 'none'}
+                      className="transition-transform duration-200 hover:scale-110" 
+                    />
                   </Button>
                 </div>
               </div>
